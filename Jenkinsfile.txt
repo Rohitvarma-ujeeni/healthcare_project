@@ -1,40 +1,43 @@
 pipeline {
-    agent { label 'Project_Slave1' }
+    agent any
 
     environment {
-        APP_NAME = 'bank_finance_app'
-        DOCKER_IMAGE = "rohitvarmaujeeni/${APP_NAME}:${BUILD_NUMBER}"
+        IMAGE_NAME = 'rohitvarma/healthcare-app'
+        KUBE_CONFIG = credentials('kubeconfig-credentials-id')       // kubeconfig secret file
+        DOCKER_CREDS = credentials('dockerhub-creds')
     }
 
     stages {
+
         stage('Checkout') {
             steps {
-                git url: 'https://github.com/Rohitvarma-ujeeni/bank_finance.git', branch: 'master'
+                git url: 'https://github.com/Rohitvarma-ujeeni/healthcare_project.git', branch: 'master'
             }
         }
 
         stage('Build & Unit Test') {
             steps {
-                sh 'mvn clean package'
-                sh 'mvn test -DsuiteXmlFile=testng.xml'
-                sh 'mvn surefire-report:report'
+                sh 'mvn clean package -DskipTests'
             }
         }
 
         stage('Docker Build & Push') {
             steps {
-                sh "docker build -t ${DOCKER_IMAGE} ."
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-                    sh "echo ${PASS} | docker login -u ${USER} --password-stdin"
-                    sh "docker push ${DOCKER_IMAGE}"
+                script {
+                    def tag = "${IMAGE_NAME}:${env.BUILD_NUMBER}"
+                    sh """
+                        echo "${DOCKER_CREDS_PSW}" | docker login -u "${DOCKER_CREDS_USR}" --password-stdin
+                        docker build -t ${tag} .
+                        docker push ${tag}
+                    """
+                    env.BUILT_IMAGE = tag
                 }
             }
         }
 
-        // ---------- DEV ENV ----------
-
+        // 🧪 DEV Environment
         stage('Provision Dev Infra') {
-            steps {
+            steps { 
                 withCredentials([
                     string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
                     string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
@@ -43,14 +46,14 @@ pipeline {
                         sh '''
                             export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                             export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-                            terraform init
-                            terraform apply -auto-approve
-                        '''
+                            terraform -chdir=infra/dev init
+                            terraform -chdir=infra/dev apply -auto-approve
+                          '''
                     }
+                  }
                 }
-                sleep(time: 59, unit: 'SECONDS')
-            }
-        }
+              }
+
 
         stage('Prepare Dev Inventory') {
             steps {
@@ -72,123 +75,86 @@ ${instanceIP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ecdsa a
 
         stage('Deploy to Dev') {
             steps {
-                sh "ansible-playbook -i inventory_dev.ini deploy.yml --extra-vars \"image=${DOCKER_IMAGE}\""
+                withCredentials([file(credentialsId: 'kubeconfig-credentials-id', variable: 'KUBECONFIG_FILE')]) {
+                    sh '''
+                        export KUBECONFIG=$KUBECONFIG_FILE
+                        sed "s|{{IMAGE_TAG}}|${BUILT_IMAGE}|g" k8s/deployment.yaml | kubectl apply -f -
+                    '''
+                }
             }
         }
 
         stage('Test on Dev') {
             steps {
-                sh 'mvn test -DsuiteXmlFile=testng.xml'
-                junit '**/target/surefire-reports/*.xml'
+                sh 'pytest tests/dev/'  // Replace with actual test suite
             }
         }
 
-        // ---------- STAGE ----------
-
+        // 🚦 STAGE Environment
         stage('Promote to Stage') {
             steps {
-                input message: 'Approve deployment to STAGE?'
+                input message: "Deploy to STAGE?", ok: "Yes, proceed"
             }
         }
 
         stage('Provision Stage Infra') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
-                ]) {
-                    dir('terraform/stage') {
-                        sh '''
-                            export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-                            export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-                            terraform init
-                            terraform apply -auto-approve
-                        '''
-                    }
-                }
-                sleep(time: 59, unit: 'SECONDS')
-            }
-        }
-
-        stage('Prepare Stage Inventory') {
-            steps {
-                script {
-                    def instanceIP = sh(script: 'terraform -chdir=terraform/stage output -raw instance_ip', returnStdout: true).trim()
-                    writeFile file: 'inventory_stage.ini', text: """
-[stage]
-${instanceIP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ecdsa ansible_ssh_common_args='-o StrictHostKeyChecking=no'
-"""
-                }
+                sh 'terraform -chdir=infra/stage init'
+                sh 'terraform -chdir=infra/stage apply -auto-approve'
             }
         }
 
         stage('Configure Stage Server') {
             steps {
-                sh 'ansible-playbook -i inventory_stage.ini playbook.yml'
+                sh 'ansible-playbook -i infra/stage/inventory.ini playbooks/stage-config.yml'
             }
         }
 
         stage('Deploy to Stage') {
             steps {
-                sh "ansible-playbook -i inventory_stage.ini deploy.yml --extra-vars \"image=${DOCKER_IMAGE}\""
+                withCredentials([file(credentialsId: 'kubeconfig-credentials-id', variable: 'KUBECONFIG_FILE')]) {
+                    sh '''
+                        export KUBECONFIG=$KUBECONFIG_FILE
+                        sed "s|{{IMAGE_TAG}}|${BUILT_IMAGE}|g" k8s/deployment.yaml | kubectl apply -f -
+                    '''
+                }
             }
         }
 
-        // ---------- PROD ----------
-
+        // 🚀 PROD Environment
         stage('Promote to Prod') {
             steps {
-                input message: 'Approve deployment to PROD?'
+                input message: "Deploy to PROD?", ok: "Yes, go live"
             }
         }
 
         stage('Provision Prod Infra') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
-                ]) {
-                    dir('terraform/prod') {
-                        sh '''
-                            export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-                            export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-                            terraform init
-                            terraform apply -auto-approve
-                        '''
-                    }
-                }
-                sleep(time: 60, unit: 'SECONDS')
-            }
-        }
-
-        stage('Prepare Prod Inventory') {
-            steps {
-                script {
-                    def instanceIP = sh(script: 'terraform -chdir=terraform/prod output -raw instance_ip', returnStdout: true).trim()
-                    writeFile file: 'inventory_prod.ini', text: """
-[prod]
-${instanceIP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ecdsa ansible_ssh_common_args='-o StrictHostKeyChecking=no'
-"""
-                }
+                sh 'terraform -chdir=infra/prod init'
+                sh 'terraform -chdir=infra/prod apply -auto-approve'
             }
         }
 
         stage('Configure Prod Server') {
             steps {
-                sh 'ansible-playbook -i inventory_prod.ini playbook.yml'
+                sh 'ansible-playbook -i infra/prod/inventory.ini playbooks/prod-config.yml'
             }
         }
 
         stage('Deploy to Prod') {
             steps {
-                sh "ansible-playbook -i inventory_prod.ini deploy.yml --extra-vars \"image=${DOCKER_IMAGE}\""
+                withCredentials([file(credentialsId: 'kubeconfig-credentials-id', variable: 'KUBECONFIG_FILE')]) {
+                    sh '''
+                        export KUBECONFIG=$KUBECONFIG_FILE
+                        sed "s|{{IMAGE_TAG}}|${BUILT_IMAGE}|g" k8s/deployment.yaml | kubectl apply -f -
+                    '''
+                }
             }
         }
 
         stage('Test on Prod') {
             steps {
-                sh 'mvn test -DsuiteXmlFile=testng.xml'
-                junit '**/target/surefire-reports/*.xml'
+                sh 'pytest tests/prod/'  // Replace with actual smoke test
             }
         }
     }
