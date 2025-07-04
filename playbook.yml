@@ -1,0 +1,122 @@
+---
+- name: Configure EC2 Instance for Docker, Ansible, and Monitoring
+  hosts: all
+  become: yes
+
+  tasks:
+
+    # Update APT and install base packages
+    - name: Update apt packages
+      apt:
+        update_cache: yes
+
+    - name: Install required apt dependencies
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+          - python3-pip
+          - software-properties-common
+          - gnupg
+          - lsb-release
+        state: present
+        update_cache: yes
+
+    # Install Ansible CLI (so ansible-galaxy works)
+    - name: Install Ansible
+      apt:
+        name: ansible
+        state: present
+        update_cache: yes
+
+    # Install Docker and configure
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker APT repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
+        state: present
+        update_cache: yes
+
+    - name: Install Docker
+      apt:
+        name: docker-ce
+        state: latest
+        update_cache: yes
+
+    - name: Ensure Docker is running
+      service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Add ubuntu user to docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    # Install Python Docker SDK and community.docker
+    - name: Install docker Python SDK
+      ansible.builtin.pip:
+        name: docker
+        executable: pip3
+
+    - name: Install community.docker collection
+      ansible.builtin.command:
+        cmd: ansible-galaxy collection install community.docker
+        creates: /root/.ansible/collections/ansible_collections/community/docker
+
+    # Setup Prometheus Node Exporter
+    - name: Create /opt directory if not exists
+      file:
+        path: /opt
+        state: directory
+        mode: '0755'
+
+    - name: Download Node Exporter v1.7.0
+      get_url:
+        url: https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz
+        dest: /opt/node_exporter-1.7.0.linux-amd64.tar.gz
+        mode: '0644'
+
+    - name: Extract Node Exporter archive
+      unarchive:
+        src: /opt/node_exporter-1.7.0.linux-amd64.tar.gz
+        dest: /opt/
+        remote_src: yes
+
+    - name: Move Node Exporter binary to /usr/local/bin
+      copy:
+        src: /opt/node_exporter-1.7.0.linux-amd64/node_exporter
+        dest: /usr/local/bin/node_exporter
+        mode: '0755'
+        remote_src: yes
+
+    - name: Create systemd service file for Node Exporter
+      copy:
+        dest: /etc/systemd/system/node_exporter.service
+        content: |
+          [Unit]
+          Description=Node Exporter
+          After=network.target
+
+          [Service]
+          ExecStart=/usr/local/bin/node_exporter
+          User=root
+
+          [Install]
+          WantedBy=default.target
+        mode: '0644'
+
+    - name: Reload systemd and start Node Exporter
+      systemd:
+        name: node_exporter
+        enabled: yes
+        state: started
+        daemon_reload: yes
