@@ -3,12 +3,9 @@ pipeline {
 
     environment {
         IMAGE_NAME = 'rohitvarma/healthcare-app'
-        KUBE_CONFIG = credentials('kubeconfig-credentials-id')       // kubeconfig secret file
-        DOCKER_CREDS = credentials('dockerhub-creds')
     }
 
     stages {
-
         stage('Checkout') {
             steps {
                 git url: 'https://github.com/Rohitvarma-ujeeni/healthcare_project.git', branch: 'master'
@@ -25,19 +22,21 @@ pipeline {
             steps {
                 script {
                     def tag = "${IMAGE_NAME}:${env.BUILD_NUMBER}"
-                    sh """
-                        echo "${DOCKER_CREDS_PSW}" | docker login -u "${DOCKER_CREDS_USR}" --password-stdin
-                        docker build -t ${tag} .
-                        docker push ${tag}
-                    """
+                    withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        sh """
+                            echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
+                            docker build -t ${tag} .
+                            docker push ${tag}
+                        """
+                    }
                     env.BUILT_IMAGE = tag
                 }
             }
         }
 
-        // 🧪 DEV Environment
+        
         stage('Provision Dev Infra') {
-            steps { 
+            steps {
                 withCredentials([
                     string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
                     string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
@@ -46,19 +45,18 @@ pipeline {
                         sh '''
                             export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                             export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-                            terraform -chdir=infra/dev init
-                            terraform -chdir=infra/dev apply -auto-approve
-                          '''
+                            terraform init
+                            terraform apply -auto-approve
+                        '''
                     }
-                  }
                 }
-              }
-
+            }
+        }
 
         stage('Prepare Dev Inventory') {
             steps {
                 script {
-                    def instanceIP = sh(script: 'terraform -chdir=terraform/dev output -raw instance_ip', returnStdout: true).trim()
+                    def instanceIP = sh(script: 'cd terraform/dev && terraform output -raw instance_ip', returnStdout: true).trim()
                     writeFile file: 'inventory_dev.ini', text: """
 [dev]
 ${instanceIP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ecdsa ansible_ssh_common_args='-o StrictHostKeyChecking=no'
@@ -69,7 +67,7 @@ ${instanceIP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ecdsa a
 
         stage('Configure Dev Server') {
             steps {
-                sh 'ansible-playbook -i inventory_dev.ini playbook.yml'
+                sh "ansible-playbook -i inventory_dev.ini playbook.yml --extra-vars 'image=${BUILT_IMAGE} env=dev'"
             }
         }
 
@@ -86,27 +84,23 @@ ${instanceIP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ecdsa a
 
         stage('Test on Dev') {
             steps {
-                sh 'pytest tests/dev/'  // Replace with actual test suite
+                sh '''
+                    pip install -r requirements.txt
+                    pytest tests/dev/
+                '''
             }
         }
 
-        // 🚦 STAGE Environment
+        // STAGE Environment
         stage('Promote to Stage') {
             steps {
                 input message: "Deploy to STAGE?", ok: "Yes, proceed"
             }
         }
 
-        stage('Provision Stage Infra') {
-            steps {
-                sh 'terraform -chdir=infra/stage init'
-                sh 'terraform -chdir=infra/stage apply -auto-approve'
-            }
-        }
-
         stage('Configure Stage Server') {
             steps {
-                sh 'ansible-playbook -i infra/stage/inventory.ini playbooks/stage-config.yml'
+                sh 'ansible-playbook -i inventory_kube.ini playbook.yml'
             }
         }
 
@@ -128,16 +122,9 @@ ${instanceIP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ecdsa a
             }
         }
 
-        stage('Provision Prod Infra') {
-            steps {
-                sh 'terraform -chdir=infra/prod init'
-                sh 'terraform -chdir=infra/prod apply -auto-approve'
-            }
-        }
-
         stage('Configure Prod Server') {
             steps {
-                sh 'ansible-playbook -i infra/prod/inventory.ini playbooks/prod-config.yml'
+                sh 'ansible-playbook -i inventory_kube.ini playbook.yml'
             }
         }
 
@@ -154,7 +141,10 @@ ${instanceIP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ecdsa a
 
         stage('Test on Prod') {
             steps {
-                sh 'pytest tests/prod/'  // Replace with actual smoke test
+                sh '''
+                    pip install -r requirements.txt
+                    pytest tests/prod/
+                '''
             }
         }
     }
