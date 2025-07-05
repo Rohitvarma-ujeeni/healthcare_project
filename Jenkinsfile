@@ -3,6 +3,7 @@ pipeline {
 
     environment {
         IMAGE_NAME = 'rohitvarma/healthcare-app'
+        DOCKER_IMAGE = "${IMAGE_NAME}:${env.BUILD_NUMBER}"
     }
 
     stages {
@@ -21,15 +22,10 @@ pipeline {
         stage('Docker Build & Push') {
             steps {
                 script {
-                    def tag = "${IMAGE_NAME}:${env.BUILD_NUMBER}"
-                    withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        sh """
-                            echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
-                            docker build -t ${tag} .
-                            docker push ${tag}
-                        """
-                    }
-                    env.BUILT_IMAGE = tag
+                    sh "docker build -t ${DOCKER_IMAGE} ."
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                    sh "echo ${PASS} | docker login -u ${USER} --password-stdin"
+                    sh "docker push ${DOCKER_IMAGE}"
                 }
             }
         }
