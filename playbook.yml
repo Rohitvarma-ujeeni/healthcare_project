@@ -8,9 +8,16 @@
     app_dir: /opt/{{ env }}
 
   tasks:
-    - name: Install Docker
+    - name: Remove conflicting containerd.io if present
       apt:
-        name: docker.io
+        name: containerd.io
+        state: absent
+      ignore_errors: yes
+
+    - name: Install required packages
+      apt:
+        name:
+          - docker.io
         state: present
         update_cache: yes
 
@@ -18,8 +25,8 @@
       file:
         path: "{{ app_dir }}"
         state: directory
-        owner: ubuntu
-        group: ubuntu
+        owner: root
+        group: root
         mode: '0755'
 
     - name: Pull Docker image
