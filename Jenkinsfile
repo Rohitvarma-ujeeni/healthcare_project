@@ -79,16 +79,22 @@ ${instanceIP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ecdsa a
             }
         }
 
-        stage('Test on Dev') {
-            steps {
-                sh '''
-                      python3 -m venv venv
-                      . venv/bin/activate
-                      pip install -r requirements.txt
-                      pytest tests/dev/
-                '''
-            }
+stage('Test on Dev') {
+    steps {
+        script {
+            def instanceIP = sh(script: 'cd terraform/dev && terraform output -raw instance_ip', returnStdout: true).trim()
+            env.DEV_URL = "http://${instanceIP}:<port>"
         }
+
+        sh '''
+            python3 -m venv venv
+            . venv/bin/activate
+            pip install -r requirements.txt
+            pytest tests/dev/ --dev-url=$DEV_URL
+        '''
+    }
+}
+
 
         stage('Promote to Stage') {
             steps {
