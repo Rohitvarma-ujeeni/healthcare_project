@@ -45,7 +45,7 @@ pipeline {
                         '''
                     }
                 }
-                sleep(time: 60, unit: 'SECONDS')
+                sleep(time: 59, unit: 'SECONDS')
             }
         }
 
