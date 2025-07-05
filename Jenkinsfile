@@ -83,7 +83,7 @@ stage('Test on Dev') {
     steps {
         script {
             def instanceIP = sh(script: 'cd terraform/dev && terraform output -raw instance_ip', returnStdout: true).trim()
-            env.DEV_URL = "http://${instanceIP}:<port>"
+            env.DEV_URL = "http://${instanceIP}:8080"
         }
 
         sh '''
