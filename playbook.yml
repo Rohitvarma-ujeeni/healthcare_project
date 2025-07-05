@@ -1,6 +1,8 @@
 ---
 - name: Configure application server
-  hosts: all
+  hosts:
+     -dev
+     -master
   become: true
 
   vars:
