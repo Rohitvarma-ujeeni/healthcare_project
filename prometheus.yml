@@ -10,6 +10,6 @@ scrape_configs:
   - job_name: 'node_exporters'
     static_configs:
       - targets:
-          - 13.201.22.74:9100
+          - 13.203.229.153:9100
           - 65.0.135.175:9100
           - 13.201.133.232:9100
