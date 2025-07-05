@@ -1,0 +1,52 @@
+---
+- name: Setup Node Exporter for monitoring
+  hosts: all
+  become: true
+  tasks:
+    - name: Create /opt directory if not exists
+      file:
+        path: /opt
+        state: directory
+        mode: '0755'
+
+    - name: Download Node Exporter v1.7.0
+      get_url:
+        url: https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz
+        dest: /opt/node_exporter-1.7.0.linux-amd64.tar.gz
+        mode: '0644'
+
+    - name: Extract Node Exporter archive
+      unarchive:
+        src: /opt/node_exporter-1.7.0.linux-amd64.tar.gz
+        dest: /opt/
+        remote_src: yes
+
+    - name: Move Node Exporter binary to /usr/local/bin
+      copy:
+        src: /opt/node_exporter-1.7.0.linux-amd64/node_exporter
+        dest: /usr/local/bin/node_exporter
+        mode: '0755'
+        remote_src: yes
+
+    - name: Create systemd service file for Node Exporter
+      copy:
+        dest: /etc/systemd/system/node_exporter.service
+        content: |
+          [Unit]
+          Description=Node Exporter
+          After=network.target
+
+          [Service]
+          ExecStart=/usr/local/bin/node_exporter
+          User=root
+
+          [Install]
+          WantedBy=default.target
+        mode: '0644'
+
+    - name: Reload systemd and start Node Exporter
+      systemd:
+        name: node_exporter
+        enabled: yes
+        state: started
+        daemon_reload: yes
