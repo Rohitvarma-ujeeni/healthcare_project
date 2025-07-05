@@ -23,7 +23,6 @@ pipeline {
         stage('Docker Build & Push') {
             steps {
                 sh "docker build -t ${DOCKER_IMAGE} ."
-
                 withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
                     sh "echo ${PASS} | docker login -u ${USER} --password-stdin"
                     sh "docker push ${DOCKER_IMAGE}"
@@ -79,22 +78,20 @@ ${instanceIP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ecdsa a
             }
         }
 
-stage('Test on Dev') {
-    steps {
-        script {
-            def instanceIP = sh(script: 'cd terraform/dev && terraform output -raw instance_ip', returnStdout: true).trim()
-            env.DEV_URL = "http://${instanceIP}:8080"
+        stage('Test on Dev') {
+            steps {
+                script {
+                    def instanceIP = sh(script: 'cd terraform/dev && terraform output -raw instance_ip', returnStdout: true).trim()
+                    env.DEV_URL = "http://${instanceIP}:8080"
+                }
+                sh '''
+                    python3 -m venv venv
+                    . venv/bin/activate
+                    pip install -r requirements.txt
+                    pytest tests/dev/ --dev-url=$DEV_URL
+                '''
+            }
         }
-
-        sh '''
-            python3 -m venv venv
-            . venv/bin/activate
-            pip install -r requirements.txt
-            pytest tests/dev/ --dev-url=$DEV_URL
-        '''
-    }
-}
-
 
         stage('Promote to Stage') {
             steps {
@@ -139,7 +136,7 @@ ${instanceIP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ecdsa a
             }
         }
 
-        stage('Deploy to stage') {
+        stage('Deploy to Stage') {
             steps {
                 withCredentials([file(credentialsId: 'kubeconfig-credentials-id', variable: 'KUBECONFIG_FILE')]) {
                     sh '''
@@ -150,21 +147,20 @@ ${instanceIP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ecdsa a
             }
         }
 
-stage('Test on stage') {
-    steps {
-        script {
-            def instanceIP = sh(script: 'cd terraform/stage && terraform output -raw instance_ip', returnStdout: true).trim()
-            env.STG_URL = "http://${instanceIP}:8080"
+        stage('Test on Stage') {
+            steps {
+                script {
+                    def instanceIP = sh(script: 'cd terraform/stage && terraform output -raw instance_ip', returnStdout: true).trim()
+                    env.STG_URL = "http://${instanceIP}:8080"
+                }
+                sh '''
+                    python3 -m venv venv
+                    . venv/bin/activate
+                    pip install -r requirements.txt
+                    pytest tests/stage/ --stage-url=$STG_URL
+                '''
+            }
         }
-
-        sh '''
-            python3 -m venv venv
-            . venv/bin/activate
-            pip install -r requirements.txt
-            pytest tests/stage/ --stage-url=$STG_URL
-        '''
-    }
-}
 
         stage('Promote to Prod') {
             steps {
@@ -174,7 +170,7 @@ stage('Test on stage') {
 
         stage('Configure Prod Server') {
             steps {
-                sh "ansible-playbook -i inventory_kube.ini playbook.yml --extra-vars 'image=${BUILT_IMAGE} env=dev'"
+                sh "ansible-playbook -i inventory_kube.ini playbook.yml --extra-vars 'image=${BUILT_IMAGE} env=prod'"
                 sh "ansible-playbook -i inventory_prod.ini node_exporter.yml"
             }
         }
@@ -192,24 +188,28 @@ stage('Test on stage') {
 
         stage('Test on Prod') {
             steps {
+                script {
+                    def instanceIP = sh(script: 'cd terraform/prod && terraform output -raw instance_ip', returnStdout: true).trim()
+                    env.PROD_URL = "http://${instanceIP}:8080"
+                }
                 sh '''
-                      python3 -m venv venv
-                      . venv/bin/activate
-                      pip install -r requirements.txt
-                      pytest tests/dev/
+                    python3 -m venv venv
+                    . venv/bin/activate
+                    pip install -r requirements.txt
+                    pytest tests/prod/ --prod-url=$PROD_URL
                 '''
             }
         }
-      stage('Config Promethus') {
-          steps {
-              sh '''
-                   sudo mv prometheus.yml /etc/prometheus/prometheus.yml
-                   sudo systemctl restart prometheus
-                 '''
-          }
-      }
+
+        stage('Config Prometheus') {
+            steps {
+                sh '''
+                    sudo mv prometheus.yml /etc/prometheus/prometheus.yml
+                    sudo systemctl restart prometheus
+                '''
+            }
+        }
     }
-    
 
     post {
         always {
