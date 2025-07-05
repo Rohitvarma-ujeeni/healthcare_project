@@ -114,7 +114,7 @@ ${instanceIP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ecdsa a
                         '''
                     }
                 }
-                sleep(time: 60, unit: 'SECONDS')
+                sleep(time: 70, unit: 'SECONDS')
             }
         }
 
