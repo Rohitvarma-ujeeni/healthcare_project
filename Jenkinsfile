@@ -22,12 +22,11 @@ pipeline {
 
         stage('Docker Build & Push') {
             steps {
-                script {
-                    sh "docker build -t ${DOCKER_IMAGE} ."
-                    withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-                        sh "echo ${PASS} | docker login -u ${USER} --password-stdin"
-                        sh "docker push ${DOCKER_IMAGE}"
-                    }
+                sh "docker build -t ${DOCKER_IMAGE} ."
+
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                    sh "echo ${PASS} | docker login -u ${USER} --password-stdin"
+                    sh "docker push ${DOCKER_IMAGE}"
                 }
             }
         }
