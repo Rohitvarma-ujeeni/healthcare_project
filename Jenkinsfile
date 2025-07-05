@@ -82,8 +82,10 @@ ${instanceIP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ecdsa a
         stage('Test on Dev') {
             steps {
                 sh '''
-                    pip install -r requirements.txt
-                    pytest tests/dev/
+                      python3 -m venv venv
+                      . venv/bin/activate
+                      pip install -r requirements.txt
+                      pytest tests/dev/
                 '''
             }
         }
