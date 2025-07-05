@@ -2,6 +2,7 @@
 - name: Configure application server
   hosts:
      - dev
+     - stage
      - master
   become: true
 
