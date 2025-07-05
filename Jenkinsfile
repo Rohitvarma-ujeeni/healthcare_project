@@ -193,7 +193,7 @@ ${instanceIP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ecdsa a
                     python3 -m venv venv
                     . venv/bin/activate
                     pip install -r requirements.txt
-                    pytest tests/prod/ --prod-url=$PROD_URL
+                    pytest tests/prod/ --prod-url=$PRO_URL
                 '''
              }
             }
