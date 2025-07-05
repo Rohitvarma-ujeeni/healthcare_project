@@ -2,7 +2,7 @@ pipeline {
     agent { label 'Project_Slave1' }
 
     environment {
-        IMAGE_NAME = 'rohitvarma/healthcare-app'
+        IMAGE_NAME = 'rohitvarmaujeeni/healthcare-app'
         DOCKER_IMAGE = "${IMAGE_NAME}:${BUILD_NUMBER}"
         BUILT_IMAGE = "${IMAGE_NAME}:${BUILD_NUMBER}"
     }
