@@ -128,6 +128,7 @@ stage('Test on Dev') {
         stage('Configure Prod Server') {
             steps {
                 sh "ansible-playbook -i inventory_kube.ini playbook.yml --extra-vars 'image=${BUILT_IMAGE} env=dev'"
+                sh "ansible-playbook -i inventory_prod.ini node_exporter.yml"
             }
         }
 
@@ -152,7 +153,16 @@ stage('Test on Dev') {
                 '''
             }
         }
+      stage('Config Promethus') {
+          steps {
+              sh '''
+                   sudo mv prometheus.yml /etc/prometheus/prometheus.yml
+                   sudo systemctl restart prometheus
+                 '''
+          }
+      }
     }
+    
 
     post {
         always {
