@@ -1,8 +1,8 @@
 ---
 - name: Configure application server
   hosts:
-     -dev
-     -master
+     -"dev"
+     -"master"
   become: true
 
   vars:
