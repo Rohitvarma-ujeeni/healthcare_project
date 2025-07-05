@@ -104,7 +104,7 @@ stage('Test on Dev') {
 
         stage('Configure Stage Server') {
             steps {
-                sh "ansible-playbook -i inventory_dev.ini playbook.yml --extra-vars 'image=${BUILT_IMAGE} env=dev'"
+                sh "ansible-playbook -i inventory_kube.ini playbook.yml --extra-vars 'image=${BUILT_IMAGE} env=dev'"
             }
         }
 
