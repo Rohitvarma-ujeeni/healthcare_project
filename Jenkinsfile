@@ -1,5 +1,5 @@
 pipeline {
-    agent any
+    agent { label 'Project_Slave1' }
 
     environment {
         IMAGE_NAME = 'rohitvarma/healthcare-app'
