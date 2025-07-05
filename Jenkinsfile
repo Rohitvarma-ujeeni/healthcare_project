@@ -3,7 +3,8 @@ pipeline {
 
     environment {
         IMAGE_NAME = 'rohitvarma/healthcare-app'
-        DOCKER_IMAGE = "${IMAGE_NAME}:${env.BUILD_NUMBER}"
+        DOCKER_IMAGE = "${IMAGE_NAME}:${BUILD_NUMBER}"
+        BUILT_IMAGE = "${IMAGE_NAME}:${BUILD_NUMBER}"
     }
 
     stages {
@@ -23,14 +24,14 @@ pipeline {
             steps {
                 script {
                     sh "docker build -t ${DOCKER_IMAGE} ."
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-                    sh "echo ${PASS} | docker login -u ${USER} --password-stdin"
-                    sh "docker push ${DOCKER_IMAGE}"
+                    withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                        sh "echo ${PASS} | docker login -u ${USER} --password-stdin"
+                        sh "docker push ${DOCKER_IMAGE}"
+                    }
                 }
             }
         }
 
-        
         stage('Provision Dev Infra') {
             steps {
                 withCredentials([
@@ -87,7 +88,6 @@ ${instanceIP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ecdsa a
             }
         }
 
-        // STAGE Environment
         stage('Promote to Stage') {
             steps {
                 input message: "Deploy to STAGE?", ok: "Yes, proceed"
@@ -111,7 +111,6 @@ ${instanceIP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ecdsa a
             }
         }
 
-        // 🚀 PROD Environment
         stage('Promote to Prod') {
             steps {
                 input message: "Deploy to PROD?", ok: "Yes, go live"
