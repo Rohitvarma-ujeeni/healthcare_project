@@ -171,7 +171,7 @@ ${instanceIP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ecdsa a
         stage('Configure Prod Server') {
             steps {
                 sh "ansible-playbook -i inventory_kube.ini playbook.yml --extra-vars 'image=${BUILT_IMAGE} env=prod'"
-                sh "ansible-playbook -i inventory_prod.ini node_exporter.yml"
+                sh "ansible-playbook -i inventory_kube.ini node_exporter.yml"
             }
         }
 
@@ -189,15 +189,13 @@ ${instanceIP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ecdsa a
         stage('Test on Prod') {
             steps {
                 script {
-                    def instanceIP = sh(script: 'cd terraform/prod && terraform output -raw instance_ip', returnStdout: true).trim()
-                    env.PROD_URL = "http://${instanceIP}:8080"
-                }
                 sh '''
                     python3 -m venv venv
                     . venv/bin/activate
                     pip install -r requirements.txt
                     pytest tests/prod/ --prod-url=$PROD_URL
                 '''
+             }
             }
         }
 
