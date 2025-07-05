@@ -121,7 +121,7 @@ stage('Test on Dev') {
             }
         }
 
-        stage('Prepare Dev Inventory') {
+        stage('Prepare Stage Inventory') {
             steps {
                 script {
                     def instanceIP = sh(script: 'cd terraform/stage && terraform output -raw instance_ip', returnStdout: true).trim()
@@ -135,7 +135,7 @@ ${instanceIP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_ecdsa a
 
         stage('Configure Stage Server') {
             steps {
-                sh "ansible-playbook -i inventory_dev.ini playbook.yml --extra-vars 'image=${BUILT_IMAGE} env=stage'"
+                sh "ansible-playbook -i inventory_stage.ini playbook.yml --extra-vars 'image=${BUILT_IMAGE} env=stage'"
             }
         }
 
@@ -161,7 +161,7 @@ stage('Test on stage') {
             python3 -m venv venv
             . venv/bin/activate
             pip install -r requirements.txt
-            pytest tests/stage/ --dev-url=$STG_URL
+            pytest tests/stage/ --stage-url=$STG_URL
         '''
     }
 }
