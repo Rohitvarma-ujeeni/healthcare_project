@@ -8,6 +8,7 @@ pipeline {
     }
 
     stages {
+
         stage('Checkout') {
             steps {
                 git url: 'https://github.com/Rohitvarma-ujeeni/healthcare_project.git', branch: 'master'
@@ -22,14 +23,17 @@ pipeline {
 
         stage('Docker Build & Push') {
             steps {
-                sh "docker build -t ${DOCKER_IMAGE} ."
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-                    sh "echo ${PASS} | docker login -u ${USER} --password-stdin"
-                    sh "docker push ${DOCKER_IMAGE}"
+                script {
+                    sh "docker build -t ${DOCKER_IMAGE} ."
+                    withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                        sh """
+                            echo "${PASS}" | docker login -u "${USER}" --password-stdin
+                            docker push ${DOCKER_IMAGE}
+                        """
+                    }
                 }
             }
         }
-
 
         stage('Promote to Prod') {
             steps {
@@ -39,8 +43,10 @@ pipeline {
 
         stage('Configure Prod Server') {
             steps {
-                sh "ansible-playbook -i inventory_kube.ini playbook.yml --extra-vars \"image=${BUILT_IMAGE} env=prod\" -e \"ansible_gather_subset=!mounts\""
-                sh "ansible-playbook -i inventory_kube.ini node_exporter.yml"
+                script {
+                    sh "ansible-playbook -i inventory_kube.ini playbook.yml --extra-vars \"image=${BUILT_IMAGE} env=prod\" -e \"ansible_gather_subset=!mounts\""
+                    sh "ansible-playbook -i inventory_kube.ini node_exporter.yml"
+                }
             }
         }
 
@@ -57,16 +63,17 @@ pipeline {
 
         stage('Test on Prod') {
             steps {
-                script {
-                sh '''
-                    python3 -m venv venv
-                    . venv/bin/activate
-                    pip install -r requirements.txt
-                    pytest tests/prod/ --prod-url=$PRO_URL
-                '''
-             }
+                withEnv(["PRO_URL=https://your-prod-url.com"]) { // Replace with actual value or inject as param
+                    sh '''
+                        python3 -m venv venv
+                        . venv/bin/activate
+                        pip install -r requirements.txt
+                        pytest tests/prod/ --prod-url=$PRO_URL
+                    '''
+                }
             }
         }
+    }
 
     post {
         always {
