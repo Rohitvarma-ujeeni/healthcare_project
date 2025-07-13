@@ -1,5 +1,5 @@
 def pytest_addoption(parser):
-    parser.addoption("--prod-url", action="store", default="http://localhost:8080", help="prod server base URL")
+    parser.addoption("--prod-url", action="store", default="http://3.111.57.183:8080", help="prod server base URL")
 
 import pytest
 
