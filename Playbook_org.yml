@@ -1,0 +1,45 @@
+---
+- name: Configure application server
+  hosts:
+     - dev
+     - stage
+     - master
+  become: true
+
+  vars:
+    docker_image: "{{ image }}"
+    app_dir: /opt/{{ env }}
+
+  tasks:
+    - name: Remove conflicting containerd.io if present
+      apt:
+        name: containerd.io
+        state: absent
+      ignore_errors: yes
+
+    - name: Install required packages
+      apt:
+        name:
+          - docker.io
+        state: present
+        update_cache: yes
+
+    - name: Create app directory
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Pull Docker image
+      command: docker pull {{ docker_image }}
+
+    - name: Stop existing container if running
+      shell: |
+        docker stop {{ env }}_app || true
+        docker rm {{ env }}_app || true
+
+    - name: Run the container
+      shell: |
+        docker run -d --name {{ env }}_app -p 8080:8080 {{ docker_image }}
