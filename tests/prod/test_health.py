@@ -1,7 +1,7 @@
 import requests
 import os
 
-BASE_URL = os.getenv("PRO_URL", "http://localhost:8080")
+BASE_URL = os.getenv("PRO_URL", "http://3.111.57.183:8080")
 
 def test_register_doctor():
     payload = {
