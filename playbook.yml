@@ -11,20 +11,7 @@
     app_dir: /opt/{{ env }}
 
   tasks:
-    - name: Remove conflicting containerd.io if present
-      apt:
-        name: containerd.io
-        state: absent
-      ignore_errors: yes
-
-    - name: Install required packages
-      apt:
-        name:
-          - docker.io
-        state: present
-        update_cache: yes
-
-    - name: Create app directory
+       - name: Create app directory
       file:
         path: "{{ app_dir }}"
         state: directory
