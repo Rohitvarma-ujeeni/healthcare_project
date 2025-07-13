@@ -68,16 +68,6 @@ pipeline {
             }
         }
 
-        stage('Config Prometheus') {
-            steps {
-                sh '''
-                    sudo mv prometheus.yml /etc/prometheus/prometheus.yml
-                    sudo systemctl restart prometheus
-                '''
-            }
-        }
-    }
-
     post {
         always {
             cleanWs()
