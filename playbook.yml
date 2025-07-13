@@ -17,13 +17,17 @@
         mode: '0755'
 
     - name: Pull Docker image
-      command: docker pull {{ docker_image }}
+      shell: docker pull {{ docker_image }}
 
     - name: Stop existing container if running
       shell: |
         docker stop {{ env }}_app || true
         docker rm {{ env }}_app || true
+      ignore_errors: true
 
-    - name: Run the container
+    - name: Run the Docker container
       shell: |
-        docker run -d --name {{ env }}_app -p 8080:8080 {{ docker_image }}
+        docker run -d \
+          --name {{ env }}_app \
+          -p 8080:8080 \
+          {{ docker_image }}
