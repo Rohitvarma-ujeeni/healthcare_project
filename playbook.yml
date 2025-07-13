@@ -1,17 +1,14 @@
 ---
 - name: Configure application server
-  hosts:
-     - dev
-     - stage
-     - master
+  hosts: dev,stage,master
   become: true
 
   vars:
     docker_image: "{{ image }}"
-    app_dir: /opt/{{ env }}
+    app_dir: "/opt/{{ env }}"
 
   tasks:
-       - name: Create app directory
+    - name: Create app directory
       file:
         path: "{{ app_dir }}"
         state: directory
