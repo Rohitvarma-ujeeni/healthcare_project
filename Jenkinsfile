@@ -39,7 +39,7 @@ pipeline {
 
         stage('Configure Prod Server') {
             steps {
-                sh "ansible-playbook -i inventory_kube.ini playbook.yml --extra-vars 'image=${BUILT_IMAGE} env=prod'"
+                sh "ansible-playbook -i inventory_kube.ini playbook.yml --extra-vars \"image=${BUILT_IMAGE} env=prod\" -e \"ansible_gather_subset=!mounts\""
                 sh "ansible-playbook -i inventory_kube.ini node_exporter.yml"
             }
         }
